@@ -26,12 +26,20 @@ type Resolver struct {
 }
 
 // NewResolver creates a new dependency resolver.
-func NewResolver(cpan *index.CPANIndex, backpan *index.BackPANIndex, dl *downloader.Downloader, verbose bool) *Resolver {
+// If dockerImage is non-empty, configure steps run inside that Docker container.
+func NewResolver(cpan *index.CPANIndex, backpan *index.BackPANIndex, dl *downloader.Downloader, verbose bool, dockerImage string) *Resolver {
+	var ext *extractor.Extractor
+	if dockerImage != "" {
+		ext = extractor.NewDockerExtractor(dockerImage)
+	} else {
+		ext = extractor.NewExtractor()
+	}
+
 	return &Resolver{
 		cpanIndex:  cpan,
 		backpan:    backpan,
 		downloader: dl,
-		extractor:  extractor.NewExtractor(),
+		extractor:  ext,
 		resolved:   make(map[string]*dist.Dist),
 		resolving:  make(map[string]bool),
 		verbose:    verbose,

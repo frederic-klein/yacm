@@ -21,6 +21,7 @@ var (
 	workers      int
 	mirror       string
 	backpanDir   string
+	dockerImage  string
 	verbose      bool
 )
 
@@ -42,6 +43,7 @@ func main() {
 	snapshotCmd.Flags().IntVarP(&workers, "workers", "w", 5, "Parallel download workers")
 	snapshotCmd.Flags().StringVarP(&mirror, "mirror", "m", "https://cpan.metacpan.org", "CPAN mirror URL")
 	snapshotCmd.Flags().StringVar(&backpanDir, "backpan-dir", "./backpan-modules", "BackPAN modules directory")
+	snapshotCmd.Flags().StringVar(&dockerImage, "docker", "", "Docker image for running configure (ensures consistent dynamic prereqs)")
 	snapshotCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
 	rootCmd.AddCommand(snapshotCmd)
@@ -101,8 +103,11 @@ func runSnapshot(cmd *cobra.Command, args []string) error {
 	dl := downloader.NewDownloader(workers, cacheDir)
 
 	// Resolve dependencies
+	if dockerImage != "" {
+		log("Using Docker image for configure: %s", dockerImage)
+	}
 	log("Resolving dependencies...")
-	res := resolver.NewResolver(cpanIdx, backpan, dl, verbose)
+	res := resolver.NewResolver(cpanIdx, backpan, dl, verbose, dockerImage)
 	dists, err := res.Resolve(allReqs)
 	if err != nil {
 		return fmt.Errorf("resolving dependencies: %w", err)

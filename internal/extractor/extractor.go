@@ -82,11 +82,19 @@ type ProvidesEntry struct {
 }
 
 // Extractor extracts META files from CPAN tarballs.
-type Extractor struct{}
+type Extractor struct {
+	dockerImage string // If set, run configure inside this Docker image
+}
 
-// NewExtractor creates a new extractor.
+// NewExtractor creates a new extractor that runs configure on the host.
 func NewExtractor() *Extractor {
 	return &Extractor{}
+}
+
+// NewDockerExtractor creates an extractor that runs configure inside Docker.
+// This ensures consistent dynamic prereq resolution regardless of host system.
+func NewDockerExtractor(image string) *Extractor {
+	return &Extractor{dockerImage: image}
 }
 
 // Extract reads META.json or META.yml from a tarball (without running configure).
@@ -210,14 +218,27 @@ func (e *Extractor) runConfigure(tarballPath string, hasMakefilePL bool) (*MetaF
 		return nil, fmt.Errorf("extracting tarball: %w", err)
 	}
 
-	// Run configure
-	var cmd *exec.Cmd
+	// Determine configure script
+	configScript := "Build.PL"
 	if hasMakefilePL {
-		cmd = exec.Command("perl", "Makefile.PL")
-	} else {
-		cmd = exec.Command("perl", "Build.PL")
+		configScript = "Makefile.PL"
 	}
-	cmd.Dir = distDir
+
+	// Run configure (in Docker or on host)
+	var cmd *exec.Cmd
+	if e.dockerImage != "" {
+		// Run inside Docker container
+		// Mount the dist directory and run perl Makefile.PL
+		cmd = exec.Command("docker", "run", "--rm",
+			"-v", distDir+":/work",
+			"-w", "/work",
+			e.dockerImage,
+			"perl", configScript)
+	} else {
+		// Run on host
+		cmd = exec.Command("perl", configScript)
+		cmd.Dir = distDir
+	}
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 
